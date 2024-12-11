@@ -1,0 +1,43 @@
+version: '3.9'
+
+volumes:
+    db:
+    pgadmin:
+
+services:
+    db:
+        image: postgres
+        container_name: postgres_db
+        restart: always
+        ports:
+            - "5432:5432"
+        env_file:
+            - dev.env
+        volumes:
+            - db:/var/lib/postgresql/data
+    pgadmin:
+        image: dpage/pgadmin4
+        container_name: pgadmin4
+        restart: always
+        ports:
+            - "5050:80"
+        env_file:
+            - dev.env
+        volumes:
+            - pgadmin:/var/lib/pgadmin
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile-dev
+        volumes:
+            - .:/django
+        container_name: Django-dev
+        restart: always
+        image: naeemkhan14/mal_tools:dev
+        command: sh -c "python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+        ports:
+            - "8000:8000"
+        env_file:
+            - dev.env
+        depends_on:
+            - db

@@ -1,0 +1,34 @@
+# The first instruction is what image we want to base our container on
+# We Use an official Python runtime as a parent image
+FROM python:3.12.4-slim
+
+# The enviroment variable ensures that the python output is set straight
+# to the terminal with out buffering it first
+ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Update the distro and get all the necessary tools to compile our requirements
+RUN apt-get update \  
+  && apt-get install -y --no-install-recommends build-essential libpq-dev \  
+  && rm -rf /var/lib/apt/lists/*
+
+# Switch to Django directory
+WORKDIR /django
+
+# Copy requirements to docker's /django directory
+COPY ./requirements/dev.txt .
+
+# Upgrade PIP and install all the requirements
+RUN pip install --upgrade pip \
+    && pip install --upgrade setuptools \
+    && pip install --no-cache-dir -r dev.txt
+
+# Add a new non-root user and give them permissions to static folder
+RUN useradd -U django_user && install -d -m 0755 -o django_user -g django_user /django/static
+
+# Switch to newly created user
+USER django_user:django_user
+
+# Copy all the files to /django/ folder on docker and set permissions to 
+# our non-root user
+COPY --chown=django_user:django_user . .
