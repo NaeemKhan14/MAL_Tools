@@ -46,16 +46,10 @@ class User(AbstractBaseUser):
     def __str__(self):
         return self.username if self.username else "MAL User"
 
-    def is_token_expired(self):
-        """
-        Check if the access token has expired.
-        """
-        return now() >= self.token_expiry
 
-    def refresh_mal_token(self):
-        """
-        Refresh the access token using the refresh token.
-        This requires an API call to MAL's token endpoint.
-        """
-        # To be implemented: Use Requests-OAuthlib to refresh tokens.
-        pass
+class BlacklistedAccessToken(models.Model):
+    token = models.TextField(unique=True)
+    blacklisted_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.token

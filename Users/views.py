@@ -9,10 +9,11 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
-from .models import User
+from .models import User, BlacklistedAccessToken
 from .utils import generate_code_verifier, generate_state
+
 
 class MALLoginView(APIView):
     """
@@ -21,6 +22,7 @@ class MALLoginView(APIView):
     If the user is already authenticated, they are redirected to the home page.
     Otherwise, this view generates an OAuth2 authorization URL and redirects the user to MAL.
     """
+
     def get(self, request):
         # Redirect to home if the user is already authenticated
         if request.user.is_authenticated:
@@ -145,78 +147,76 @@ class MALCallbackView(APIView):
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
-        # Return JWT tokens to the client
-        return Response({
-            "access": access_token,
-            "refresh": refresh_token,
-        })
+        # Prepare response
+        response = Response({"message": "Login successful."})
 
+        # Set the tokens in HTTP-only secure cookies
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite='Strict',
+            max_age=60 * 15  # Access token lifetime (15 minutes)
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite='Strict',
+            max_age=60 * 60 * 24 * 7  # Refresh token lifetime (7 days)
+        )
 
-class RefreshMALTokenView(APIView):
-    """
-    Handles refreshing the MyAnimeList access token using the refresh token.
-
-    This view ensures uninterrupted access to MAL's API by obtaining a new access token.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-
-        if not user.refresh_token:
-            return Response({"error": "No refresh token available for this user."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Token refresh URL and payload
-        token_url = "https://myanimelist.net/v1/oauth2/token"
-        payload = {
-            "grant_type": "refresh_token",
-            "refresh_token": user.refresh_token,
-            "client_id": os.environ.get("Client_ID"),
-            "client_secret": os.environ.get("Client_Secret"),
-        }
-
-        # Request a new access token
-        response = requests.post(token_url, data=payload)
-        if response.status_code != 200:
-            return Response({"error": "Failed to refresh access token from MyAnimeList."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        token_data = response.json()
-        new_access_token = token_data.get("access_token")
-        new_refresh_token = token_data.get("refresh_token", user.refresh_token)
-        expires_in = token_data.get("expires_in")
-
-        if not new_access_token or not expires_in:
-            return Response({"error": "Invalid token response from MyAnimeList."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Update user's tokens in the database
-        user.access_token = new_access_token
-        user.refresh_token = new_refresh_token
-        user.token_expiry = now() + timedelta(seconds=expires_in)
-        user.save()
-
-        # Return the new access token
-        return Response({
-            "access_token": new_access_token,
-            "expires_in": expires_in,
-        }, status=status.HTTP_200_OK)
+        return response
 
 
 class LogoutView(APIView):
     """
-    Handles user logout by blacklisting the JWT refresh token and clearing the session.
-    """
-    def post(self, request):
-        refresh_token = request.data.get("refresh")
-        if not refresh_token:
-            return Response({"error": "Refresh token is required"}, status=status.HTTP_400_BAD_REQUEST)
+    Handles user logout by blacklisting JWT tokens and clearing the session.
 
-        try:
-            # Blacklist the JWT refresh token
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            # Log out the user and clear the session
-            logout(request)
-            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    This view ensures that both the access token and refresh token are blacklisted,
+    and the user's session is cleared to prevent further access.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        Handle POST request for logging out the user.
+
+        Blacklists the refresh token and access token, and clears the session.
+
+        Args:
+            request: The incoming HTTP request containing the tokens.
+
+        Returns:
+            Response: A success message on successful logout.
+
+        Raises:
+            400 Bad Request: If the refresh token is not provided or invalid.
+        """
+        # Blacklist the refresh token
+        refresh_token = request.COOKIES.get('refresh_token')
+
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()  # Blacklist the refresh token
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Blacklist the access token
+        auth_header = request.headers.get("Authorization")
+
+        if auth_header and auth_header.startswith("Bearer "):
+            access_token = auth_header.split(" ")[1]
+            BlacklistedAccessToken.objects.create(token=access_token)
+
+        # Log out the user and clear session
+        logout(request)
+        request.session.flush()
+
+        # Prepare response and clear the refresh token cookie
+        response = Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+        response.delete_cookie('refresh_token')
+        return response
