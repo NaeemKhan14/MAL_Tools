@@ -22,8 +22,8 @@ class CustomAccessToken(AccessToken):
             super().verify()
         except TokenError:
             # Handle malformed or invalid tokens
-            raise AuthenticationFailed("Access token is invalid or malformed.")
+            raise AuthenticationFailed()
 
         # Check if the token exists in the blacklist
         if BlacklistedAccessToken.objects.filter(token=str(self)).exists():
-            raise AuthenticationFailed("Access token has been blacklisted")
+            raise AuthenticationFailed()

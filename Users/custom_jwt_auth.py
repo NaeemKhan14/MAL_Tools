@@ -33,4 +33,4 @@ class CustomJWTAuthentication(JWTAuthentication):
             return token
         except TokenError:
             # Raised for malformed or invalid tokens
-            raise AuthenticationFailed("Access token is invalid or malformed.")
+            raise AuthenticationFailed()
