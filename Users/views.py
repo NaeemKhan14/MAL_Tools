@@ -1,5 +1,6 @@
 import logging
 import os
+
 import requests
 from django.contrib.auth import logout
 from django.shortcuts import redirect
@@ -9,7 +10,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, BlacklistedAccessToken
 from .utils import generate_code_verifier, generate_state
@@ -219,4 +220,6 @@ class LogoutView(APIView):
         # Prepare response and clear the refresh token cookie
         response = Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
         response.delete_cookie('refresh_token')
+        response.delete_cookie('access_token')
+
         return response

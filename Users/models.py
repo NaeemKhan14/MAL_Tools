@@ -1,6 +1,5 @@
-from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
-from django.utils.timezone import now
+from django.db import models
 
 
 class UserManager(BaseUserManager):
@@ -41,10 +40,10 @@ class User(AbstractBaseUser):
     objects = UserManager()
 
     USERNAME_FIELD = "mal_user_id"  # Unique field for authentication
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ['access_token', 'refresh_token']
 
     def __str__(self):
-        return self.username if self.username else "MAL User"
+        return self.username
 
 
 class BlacklistedAccessToken(models.Model):
