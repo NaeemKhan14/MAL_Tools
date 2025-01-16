@@ -27,7 +27,7 @@ class MALLoginView(APIView):
     def get(self, request):
         # Redirect to home if the user is already authenticated
         if request.user.is_authenticated:
-            return redirect(reverse("home"))
+            return redirect(reverse("high_rated_anime"))
 
         # Get client_id from environment variables
         client_id = os.environ.get("Client_ID")

@@ -140,7 +140,7 @@ class LogoutTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Now make a new request to a protected endpoint
-        protected_url = reverse("home")
+        protected_url = reverse("high_rated_anime")
         response_after_logout = self.client.get(protected_url)
 
         # We expect 401 or 403 because the user should be unauthenticated now
